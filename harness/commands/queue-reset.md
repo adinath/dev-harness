@@ -1,0 +1,23 @@
+---
+description: Clear the agent pipeline queue. Use when you want to abandon the current spec and start over. Usage: /queue-reset
+---
+
+You are about to clear the agent pipeline queue at `harness/queue/agent-queue.json`.
+
+1. Read the current queue file. Print its contents so the user can confirm what is being discarded.
+2. Ask the user to confirm with "yes" before proceeding.
+3. If confirmed, overwrite the file with an empty JSON object:
+
+```json
+{}
+```
+
+4. Print a confirmation message:
+
+> Queue cleared. Use `/implement <spec-name>` to start a new pipeline.
+
+If the user does not confirm, leave the queue untouched and print:
+
+> Cancelled. Queue unchanged.
+
+Do not delete any plan files in `harness/plans/`; they remain as historical record.

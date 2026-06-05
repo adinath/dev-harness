@@ -1,0 +1,65 @@
+{
+  "$schema": "./harness.schema.json",
+  "project": {
+    "name": "my-project",
+    "description": "A short, one-sentence value proposition for the project."
+  },
+  "targets": ["claude", "cursor", "copilot", "agents-md"],
+  "paths": {
+    "agents": "harness/agents",
+    "commands": "harness/commands",
+    "hooks": "harness/hooks",
+    "skills": "harness/skills",
+    "specs": "harness/specs",
+    "plans": "harness/plans",
+    "queue": "harness/queue/agent-queue.json"
+  },
+  "pipeline": {
+    "stages": [
+      {
+        "id": "spec-reader",
+        "readyStatus": "STARTING",
+        "completedStatus": "READY_FOR_ARCH"
+      },
+      {
+        "id": "architect-review",
+        "readyStatus": "READY_FOR_ARCH",
+        "completedStatus": "READY_FOR_IMPL"
+      },
+      {
+        "id": "implementer",
+        "readyStatus": "READY_FOR_IMPL",
+        "completedStatus": "READY_FOR_TESTS"
+      },
+      {
+        "id": "test-writer",
+        "readyStatus": "READY_FOR_TESTS",
+        "completedStatus": "READY_FOR_REVIEW"
+      },
+      {
+        "id": "code-reviewer",
+        "readyStatus": "READY_FOR_REVIEW",
+        "completedStatus": "COMPLETE"
+      }
+    ]
+  },
+  "hooks": {
+    "guard": {
+      "extraPatterns": []
+    },
+    "lint": {
+      "commands": {}
+    }
+  },
+  "claude": {
+    "model": null,
+    "permissionMode": "auto"
+  },
+  "cursor": {
+    "protectedBranches": ["main", "master", "release/*"]
+  },
+  "copilot": {
+    "emitChatModes": true,
+    "emitPrompts": true
+  }
+}
