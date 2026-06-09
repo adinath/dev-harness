@@ -164,16 +164,16 @@ function writeHooks({ harnessRoot, repoRoot, targetRoot, messages }) {
   const hooks = {
     hooks: {
       PreToolUse: [
-        { type: 'command', command: `node ${hookPath('guard-destructive.mjs')}` },
+        { type: 'command', command: `bun ${hookPath('guard-destructive.mjs')}` },
       ],
       PostToolUse: [
-        { type: 'command', command: `node ${hookPath('lint-and-format.mjs')}` },
+        { type: 'command', command: `bun ${hookPath('lint-and-format.mjs')}` },
       ],
       SubagentStop: [
-        { type: 'command', command: `node ${hookPath('advance-queue.mjs')}` },
+        { type: 'command', command: `bun ${hookPath('advance-queue.mjs')}` },
       ],
       Stop: [
-        { type: 'command', command: `node ${hookPath('check-queue.mjs')}` },
+        { type: 'command', command: `bun ${hookPath('check-queue.mjs')}` },
       ],
     },
   };

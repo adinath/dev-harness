@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Stop hook — prints the current pipeline status and the next action
 // after every main-agent turn. Never blocks; failures are silent.
 

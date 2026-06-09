@@ -73,7 +73,7 @@ function writeClaudeMemory({ targetRoot, messages }) {
 
 function writeSettings({ harnessRoot, repoRoot, targetRoot, config, messages }) {
   const hooksDir = relative(repoRoot, join(harnessRoot, 'hooks')).split('\\').join('/');
-  const cmd = (script) => `node "$CLAUDE_PROJECT_DIR/${hooksDir}/${script}"`;
+  const cmd = (script) => `bun "$CLAUDE_PROJECT_DIR/${hooksDir}/${script}"`;
 
   const settings = {
     permissionMode: config?.claude?.permissionMode ?? 'auto',

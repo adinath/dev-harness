@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // PostToolUse hook — runs project-configured lint/format commands against
 // the file just written. Config lives at harness.config.json#hooks.lint.commands
 // and maps glob patterns (relative globs OK) to a shell command. The hook

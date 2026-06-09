@@ -4,25 +4,25 @@
   "hooks": {
     "beforeShellExecution": [
       {
-        "command": "node harness/hooks/guard-destructive.mjs",
+        "command": "bun harness/hooks/guard-destructive.mjs",
         "timeout": 10
       }
     ],
     "afterFileEdit": [
       {
-        "command": "node harness/hooks/lint-and-format.mjs",
+        "command": "bun harness/hooks/lint-and-format.mjs",
         "timeout": 30
       }
     ],
     "subagentStop": [
       {
-        "command": "node harness/hooks/advance-queue.mjs",
+        "command": "bun harness/hooks/advance-queue.mjs",
         "timeout": 15
       }
     ],
     "stop": [
       {
-        "command": "node harness/hooks/check-queue.mjs",
+        "command": "bun harness/hooks/check-queue.mjs",
         "timeout": 15
       }
     ]

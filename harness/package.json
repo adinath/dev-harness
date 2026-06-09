@@ -7,12 +7,12 @@
     "harness": "bin/harness.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "bun": ">=1.0"
   },
   "scripts": {
-    "sync": "node bin/harness.mjs sync",
-    "status": "node bin/harness.mjs status",
-    "init": "node bin/harness.mjs init"
+    "sync": "bun bin/harness.mjs sync",
+    "status": "bun bin/harness.mjs status",
+    "init": "bun bin/harness.mjs init"
   },
   "license": "MIT",
   "dependencies": {},

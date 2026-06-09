@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // SubagentStop / stop hook — advances the queue to the next stage when
 // the previous stage's "READY_FOR_*" status is observed.
 

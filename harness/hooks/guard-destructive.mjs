@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // PreToolUse hook for shell tools — blocks generic destructive commands.
 // Extra patterns can be added via harness.config.json#hooks.guard.extraPatterns.
 

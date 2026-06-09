@@ -4,25 +4,25 @@
     "PreToolUse": [
       {
         "type": "command",
-        "command": "node harness/hooks/guard-destructive.mjs"
+        "command": "bun harness/hooks/guard-destructive.mjs"
       }
     ],
     "PostToolUse": [
       {
         "type": "command",
-        "command": "node harness/hooks/lint-and-format.mjs"
+        "command": "bun harness/hooks/lint-and-format.mjs"
       }
     ],
     "SubagentStop": [
       {
         "type": "command",
-        "command": "node harness/hooks/advance-queue.mjs"
+        "command": "bun harness/hooks/advance-queue.mjs"
       }
     ],
     "Stop": [
       {
         "type": "command",
-        "command": "node harness/hooks/check-queue.mjs"
+        "command": "bun harness/hooks/check-queue.mjs"
       }
     ]
   }

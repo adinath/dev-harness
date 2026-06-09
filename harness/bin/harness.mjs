@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // harness — tool-agnostic developer harness CLI.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs';

@@ -108,16 +108,16 @@ function writeHooks({ harnessRoot, repoRoot, targetRoot, config, messages }) {
     version: 1,
     hooks: {
       beforeShellExecution: [
-        { command: `node ${hookPath('guard-destructive.mjs')}`, timeout: 10 },
+        { command: `bun ${hookPath('guard-destructive.mjs')}`, timeout: 10 },
       ],
       afterFileEdit: [
-        { command: `node ${hookPath('lint-and-format.mjs')}`, timeout: 30 },
+        { command: `bun ${hookPath('lint-and-format.mjs')}`, timeout: 30 },
       ],
       subagentStop: [
-        { command: `node ${hookPath('advance-queue.mjs')}`, timeout: 15 },
+        { command: `bun ${hookPath('advance-queue.mjs')}`, timeout: 15 },
       ],
       stop: [
-        { command: `node ${hookPath('check-queue.mjs')}`, timeout: 15 },
+        { command: `bun ${hookPath('check-queue.mjs')}`, timeout: 15 },
       ],
     },
   };
