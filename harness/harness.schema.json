@@ -1,0 +1,202 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "harness.schema.json",
+  "title": "Harness Config",
+  "description": "Configuration for the dev-harness spec-driven development pipeline.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "project": {
+      "description": "Display metadata for this repository.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Short name of the project.",
+          "type": "string"
+        },
+        "description": {
+          "description": "One-sentence value proposition for the project.",
+          "type": "string"
+        }
+      }
+    },
+    "targets": {
+      "description": "Tool targets that `harness sync` writes output for.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["claude", "cursor", "copilot", "agents-md"]
+      },
+      "uniqueItems": true
+    },
+    "paths": {
+      "description": "Overrides for source directory paths, relative to the repo root.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "agents": {
+          "description": "Directory containing agent markdown files.",
+          "type": "string",
+          "default": "harness/agents"
+        },
+        "commands": {
+          "description": "Directory containing slash-command markdown files.",
+          "type": "string",
+          "default": "harness/commands"
+        },
+        "hooks": {
+          "description": "Directory containing hook scripts.",
+          "type": "string",
+          "default": "harness/hooks"
+        },
+        "skills": {
+          "description": "Directory containing skill subdirectories.",
+          "type": "string",
+          "default": "harness/skills"
+        },
+        "specs": {
+          "description": "Directory containing feature spec files.",
+          "type": "string",
+          "default": "harness/specs"
+        },
+        "plans": {
+          "description": "Directory where agent plan outputs are written.",
+          "type": "string",
+          "default": "harness/plans"
+        },
+        "queue": {
+          "description": "Path to the pipeline queue JSON file.",
+          "type": "string",
+          "default": "harness/queue/agent-queue.json"
+        }
+      }
+    },
+    "pipeline": {
+      "description": "Pipeline stage definitions. Order determines agent color assignment and Copilot handoff links.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "readyStatus", "completedStatus"],
+            "properties": {
+              "id": {
+                "description": "Must match the `name` frontmatter field in the corresponding agent markdown file.",
+                "type": "string"
+              },
+              "readyStatus": {
+                "description": "Queue status value that signals this stage is ready to run.",
+                "type": "string"
+              },
+              "completedStatus": {
+                "description": "Queue status value written when this stage finishes.",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "hooks": {
+      "description": "Configuration consumed directly by hook scripts at runtime.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "guard": {
+          "description": "Settings for guard-destructive.mjs (PreToolUse).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "extraPatterns": {
+              "description": "Additional shell-command patterns to block, in addition to the built-in list. Each entry is a regex string matched against the full command.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          }
+        },
+        "lint": {
+          "description": "Settings for lint-and-format.mjs (PostToolUse).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "commands": {
+              "description": "Map of glob pattern → shell command. Run against every file written by the agent. Use `{file}` as a placeholder for the file path; if omitted the path is appended.",
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "examples": [
+                { "**/*.ts": "bun run tsc --noEmit" },
+                { "**/*.{js,ts,mjs}": "bunx eslint --fix {file}" }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "claude": {
+      "description": "Claude Code-specific settings written to .claude/settings.json by `harness sync`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "description": "Claude model ID to pin in .claude/settings.json. Set to null to let Claude Code use the user's active selection.",
+          "type": ["string", "null"],
+          "examples": [
+            "claude-opus-4-8",
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5-20251001"
+          ]
+        },
+        "permissionMode": {
+          "description": "Claude Code permission mode written to .claude/settings.json.",
+          "type": "string",
+          "enum": ["default", "auto", "bypassPermissions", "plan"],
+          "default": "auto"
+        }
+      }
+    },
+    "cursor": {
+      "description": "Cursor-specific settings used during `harness sync`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "protectedBranches": {
+          "description": "Branch names (glob patterns allowed) that guard-destructive.mjs will refuse to push to or force-reset.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["main", "master", "release/*"]]
+        }
+      }
+    },
+    "copilot": {
+      "description": "GitHub Copilot-specific settings used during `harness sync`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "emitChatModes": {
+          "description": "Kept for backwards compatibility. Has no effect since .github/chatmodes/ was deprecated in VS Code 1.106.",
+          "type": "boolean",
+          "default": true
+        },
+        "emitPrompts": {
+          "description": "Whether to write .github/prompts/*.prompt.md files (slash commands as Copilot prompts).",
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  }
+}
