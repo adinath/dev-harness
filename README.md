@@ -21,7 +21,7 @@ AI coding agents are most useful when they share a consistent operating model ac
 
 ```bash
 # Copy the harness/ directory into your project root
-cp -r /path/to/dev-harness1/harness ./harness
+cp -r /path/to/dev-harness/harness ./harness
 
 # Install the CLI globally so you can run `harness` from anywhere
 npm install -g ./harness
@@ -71,12 +71,12 @@ State is persisted in `harness/queue/agent-queue.json`. Hooks automatically adva
 | Field | Purpose |
 |---|---|
 | `targets` | Which configs to generate: `claude`, `cursor`, `copilot`, `agents-md` |
-| `pipeline.stages` | Ordered pipeline stages (default is the five-stage flow) |
+| `pipeline.stages` | Ordered stages; drives the hooks' queue transitions, status hints, and Copilot handoffs |
 | `hooks.guard.extraPatterns` | Project-specific shell-command patterns to block |
 | `hooks.lint.commands` | Map of glob → shell command run after each file write |
 | `claude.model` | Pin a Claude model in `.claude/settings.json`, or `null` to inherit |
-| `claude.permissionMode` | Default permission mode (`auto`, `acceptEdits`, etc.) |
-| `cursor.protectedBranches` | Branches blocked from force-push by the guard hook |
+| `claude.permissionMode` | Permission mode written as `permissions.defaultMode` (`default`, `acceptEdits`, `plan`, `bypassPermissions`) |
+| `cursor.protectedBranches` | Branches (globs allowed) the guard hook refuses to push to or force-reset |
 
 After editing `harness.config.json`, run `harness sync` to apply.
 
@@ -115,6 +115,8 @@ harness help                   Show help
 
 Targets: `claude`, `cursor`, `copilot`, `agents-md`
 
+Run the harness's own tests with `cd harness && npm test` (uses `node --test`).
+
 ## Directory structure
 
 ```
@@ -127,6 +129,7 @@ harness/                  Source of truth — edit here, never in generated dirs
   plans/                  Plans and review outputs (pipeline outputs)
   queue/                  Pipeline state (agent-queue.json)
   templates/              Starter templates for specs and skills
+  tests/                  Test suite for the harness itself (`npm test`)
   bin/harness.mjs         CLI entry point
   harness.config.json     Harness configuration
 .claude/                  Generated — Claude Code config

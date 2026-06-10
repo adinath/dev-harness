@@ -95,8 +95,10 @@ Write the report to `harness/plans/<spec-name>-review.md`.
 
 ## Queue update
 
-- APPROVED: `{ currentStage: "done", status: "COMPLETE", reviewedAt: "<ISO timestamp>" }`.
-- CHANGES_REQUIRED: `{ currentStage: "implementer", status: "NEEDS_CHANGES" }`, with an `issues` array listing each blocking item.
+Set only the fields listed below in `harness/queue/agent-queue.json`, preserving every other existing field — never replace the whole object.
+
+- APPROVED: set `currentStage: "done"`, `status: "COMPLETE"`, and `reviewedAt: "<ISO timestamp>"`.
+- CHANGES_REQUIRED: set `currentStage: "implementer"` and `status: "NEEDS_CHANGES"`, with an `issues` array listing each blocking item.
 
 ## Rules
 

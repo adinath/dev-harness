@@ -73,7 +73,7 @@ Anything that could go wrong, plus constraints imposed by existing code.
 
 ## Queue update
 
-On success, write to `harness/queue/agent-queue.json`:
+On success, update `harness/queue/agent-queue.json` by setting the fields below. Read the file first and preserve every other existing field (`startedAt`, `implementedFiles`, `testFiles`, etc.) — never replace the whole object:
 
 ```json
 {

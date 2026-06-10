@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // PostToolUse hook — runs project-configured lint/format commands against
 // the file just written. Config lives at harness.config.json#hooks.lint.commands
 // and maps glob patterns (relative globs OK) to a shell command. The hook
@@ -8,6 +8,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative, sep } from 'node:path';
+import { globToRegex, shellQuote } from './lib.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const configPath = resolve(here, '..', 'harness.config.json');
@@ -33,17 +34,6 @@ function loadCommands() {
   }
 }
 
-function globToRegex(glob) {
-  const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-  const expanded = escaped
-    .replace(/\\\{([^}]+)\\\}/g, (_, group) => `(${group.split(',').join('|')})`)
-    .replace(/\*\*\//g, '.{0,}')
-    .replace(/\*\*/g, '.{0,}')
-    .replace(/\*/g, '[^/]*')
-    .replace(/\?/g, '[^/]');
-  return new RegExp(`^${expanded}$`);
-}
-
 function shouldSkip(filePath) {
   return (
     filePath.includes(`${sep}node_modules${sep}`) ||
@@ -54,11 +44,14 @@ function shouldSkip(filePath) {
 }
 
 const input = readHookInput();
-const filePaths = extractFilePaths(input?.tool_input);
+// Claude/Copilot nest the tool arguments under tool_input; Cursor's
+// afterFileEdit puts file_path at the top level.
+const filePaths = extractFilePaths(input?.tool_input ?? input);
 
 if (filePaths.length === 0) process.exit(0);
 
 const commands = loadCommands();
+let hasIssues = false;
 
 for (const filePath of filePaths) {
   if (shouldSkip(filePath)) continue;
@@ -70,24 +63,29 @@ for (const filePath of filePaths) {
   if (matches.length === 0) continue;
 
   for (const [, rawCommand] of matches) {
+    // Single-quote escaping: a filename containing backticks or $(...)
+    // must never execute inside the shell command.
+    const quotedPath = shellQuote(filePath);
     const command = rawCommand.includes('{file}')
-      ? rawCommand.replaceAll('{file}', JSON.stringify(filePath))
-      : `${rawCommand} ${JSON.stringify(filePath)}`;
+      ? rawCommand.replaceAll('{file}', quotedPath)
+      : `${rawCommand} ${quotedPath}`;
     try {
       execSync(command, { stdio: 'pipe', timeout: LINT_TIMEOUT_MS });
     } catch (error) {
+      hasIssues = true;
       const stdout = error.stdout?.toString().trim();
       const stderr = error.stderr?.toString().trim();
       const output = [stdout, stderr].filter(Boolean).join('\n');
-      if (output) {
-        process.stderr.write(`\nlint-and-format issues in ${relativePath}:\n${output}\n`);
-      }
-      // Warn only; do not block the file write.
+      process.stderr.write(
+        `\nlint-and-format issues in ${relativePath}:\n${output || error.message}\n`,
+      );
     }
   }
 }
 
-process.exit(0);
+// Exit 2 feeds stderr back to the agent so it can fix the lint issues
+// itself; the file write already happened, so nothing is blocked.
+process.exit(hasIssues ? 2 : 0);
 
 // Extracts file path(s) from a tool input, accepting both Claude/Cursor
 // snake_case (`file_path`, `path`, `files`) and VS Code Copilot camelCase

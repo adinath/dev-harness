@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // PreToolUse hook for shell tools — blocks generic destructive commands.
 // Extra patterns can be added via harness.config.json#hooks.guard.extraPatterns.
 
@@ -16,23 +16,70 @@ const BUILTIN_PATTERNS = [
   { pattern: '\\bTRUNCATE\\s+TABLE\\b', flags: 'i', reason: 'TRUNCATE TABLE is not allowed' },
   { pattern: '\\bDELETE\\s+FROM\\b[^;]*\\bWHERE\\s+1\\s*=\\s*1\\b', flags: 'i', reason: 'Unconditional DELETE is not allowed' },
   { pattern: '\\bDELETE\\s+FROM\\s+[\\w."`]+\\s*;', flags: 'i', reason: 'DELETE without WHERE clause is not allowed' },
-  { pattern: '\\bgit\\s+push\\s+(?:--force|-f)\\b', flags: '', reason: 'Force push requires explicit human approval' },
-  { pattern: '\\bgit\\s+reset\\s+--hard\\s+HEAD', flags: '', reason: 'Hard reset to HEAD requires explicit human approval' },
+  // Matches the force flag anywhere in the push command (also after the
+  // remote), combined short flags like -uf, but not --force-with-lease,
+  // which is the safer variant and stays allowed.
+  { pattern: '\\bgit\\s+push\\b[^|;&]*\\s(?:--force(?![-\\w])|-[a-zA-Z]*f\\b)', flags: '', reason: 'Force push requires explicit human approval (--force-with-lease is allowed)' },
+  { pattern: '\\bgit\\s+reset\\b[^|;&]*--hard\\b', flags: '', reason: 'Hard reset requires explicit human approval' },
   { pattern: ':\\(\\)\\{.*\\|:&\\}', flags: '', reason: 'Fork bomb pattern detected' },
 ];
 
-function loadExtraPatterns() {
-  if (!existsSync(configPath)) return [];
+function loadConfig() {
+  if (!existsSync(configPath)) return null;
   try {
-    const config = JSON.parse(readFileSync(configPath, 'utf8'));
-    const extras = config?.hooks?.guard?.extraPatterns;
-    return Array.isArray(extras) ? extras : [];
+    return JSON.parse(readFileSync(configPath, 'utf8'));
   } catch {
-    return [];
+    return null;
   }
 }
 
+function extraPatterns(config) {
+  const extras = config?.hooks?.guard?.extraPatterns;
+  return Array.isArray(extras) ? extras.map(normalizeRule).filter(Boolean) : [];
+}
+
+// A branch name token: stops at whitespace, refspec colons, quotes, and
+// shell separators, so `release/*` cannot match across argument edges.
+const BRANCH_GLOB_STAR = '[^\\s:;|&\'"`]*';
+const BRANCH_END = '(?=[\\s;|&\'"`)]|$)';
+
+function branchGlobToRegex(glob) {
+  return glob.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replaceAll('*', BRANCH_GLOB_STAR);
+}
+
+// cursor.protectedBranches: block pushes to (including deletes via
+// `:branch` / `--delete branch` refspecs) and force-resets of matching
+// branches. A bare `git push` with no ref cannot be checked here.
+function protectedBranchRules(config) {
+  const branches = config?.cursor?.protectedBranches;
+  if (!Array.isArray(branches)) return [];
+  const rules = [];
+  for (const glob of branches) {
+    if (typeof glob !== 'string' || glob === '') continue;
+    const branch = branchGlobToRegex(glob);
+    rules.push({
+      pattern: `\\bgit\\s+push\\b[^|;&]*[\\s:'"\`]${branch}${BRANCH_END}`,
+      reason: `Pushing to protected branch "${glob}" requires explicit human approval`,
+    });
+    rules.push({
+      pattern: `\\bgit\\s+branch\\s+(?:-f|--force)\\s+${branch}${BRANCH_END}`,
+      reason: `Force-resetting protected branch "${glob}" requires explicit human approval`,
+    });
+  }
+  return rules;
+}
+
+// Entries may be a bare regex string or a { pattern, flags?, reason? } object.
+// Anything else is dropped: an invalid entry must never widen the guard
+// (new RegExp(undefined) compiles to an empty pattern that matches everything).
+function normalizeRule(entry) {
+  if (typeof entry === 'string') return { pattern: entry };
+  if (entry && typeof entry === 'object' && typeof entry.pattern === 'string') return entry;
+  return null;
+}
+
 function compile(rule) {
+  if (typeof rule.pattern !== 'string' || rule.pattern === '') return null;
   try {
     return { regex: new RegExp(rule.pattern, rule.flags ?? ''), reason: rule.reason ?? 'Blocked by guard' };
   } catch {
@@ -50,24 +97,43 @@ function readHookInput() {
 
 const input = readHookInput();
 const toolInput = input?.tool_input ?? {};
-// Claude/Cursor use `command`; VS Code Copilot's runTerminalCommand uses
-// `command` as well, but defensive double-check `cmd` for older shells.
-const command = toolInput.command ?? toolInput.cmd ?? '';
+// Claude/Copilot nest the command under tool_input; Cursor's
+// beforeShellExecution sends `command` at the top level.
+const command = toolInput.command ?? toolInput.cmd ?? input?.command ?? '';
 
-if (!command) process.exit(0);
+// Cursor's hook protocol differs from Claude Code's: it reads a
+// {"permission": "allow" | "deny"} JSON object from stdout (exit 0),
+// whereas Claude Code blocks on exit 2 with the reason on stderr.
+const isCursorProtocol =
+  input?.tool_input === undefined &&
+  (input?.hook_event_name === 'beforeShellExecution' || typeof input?.command === 'string');
 
-const rules = [...BUILTIN_PATTERNS, ...loadExtraPatterns()].map(compile).filter(Boolean);
-
-for (const { regex, reason } of rules) {
-  if (regex.test(command)) {
-    process.stderr.write(
-      JSON.stringify({
-        decision: 'block',
-        reason: `Blocked: ${reason}\nCommand: ${command}`,
-      }),
-    );
-    process.exit(2);
-  }
+function allow() {
+  if (isCursorProtocol) process.stdout.write(JSON.stringify({ permission: 'allow' }));
+  process.exit(0);
 }
 
-process.exit(0);
+function deny(reason) {
+  const message = `Blocked: ${reason}\nCommand: ${command}`;
+  if (isCursorProtocol) {
+    process.stdout.write(
+      JSON.stringify({ permission: 'deny', userMessage: `Blocked: ${reason}`, agentMessage: message }),
+    );
+    process.exit(0);
+  }
+  process.stderr.write(JSON.stringify({ decision: 'block', reason: message }));
+  process.exit(2);
+}
+
+if (!command) allow();
+
+const config = loadConfig();
+const rules = [...BUILTIN_PATTERNS, ...extraPatterns(config), ...protectedBranchRules(config)]
+  .map(compile)
+  .filter(Boolean);
+
+for (const { regex, reason } of rules) {
+  if (regex.test(command)) deny(reason);
+}
+
+allow();

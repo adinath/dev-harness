@@ -76,7 +76,7 @@
       }
     },
     "pipeline": {
-      "description": "Pipeline stage definitions. Order determines agent color assignment and Copilot handoff links.",
+      "description": "Ordered pipeline stage definitions. These drive the queue state machine at runtime (hook transitions, next-action hints, the SubagentStop matcher) plus agent color assignment and Copilot handoff links. Note: agent prompt files under harness/agents/ write status strings literally, so custom stages require matching prompt edits.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -93,6 +93,10 @@
               },
               "readyStatus": {
                 "description": "Queue status value that signals this stage is ready to run.",
+                "type": "string"
+              },
+              "activeStatus": {
+                "description": "Queue status value while this stage runs; the queue-advance hook flips readyStatus to this. Defaults to IN_<ID> (with the historical names kept for the five default stage ids). Not used for the first stage, which /implement invokes directly.",
                 "type": "string"
               },
               "completedStatus": {
@@ -115,10 +119,35 @@
           "additionalProperties": false,
           "properties": {
             "extraPatterns": {
-              "description": "Additional shell-command patterns to block, in addition to the built-in list. Each entry is a regex string matched against the full command.",
+              "description": "Additional shell-command patterns to block, in addition to the built-in list. Each entry is either a regex string matched against the full command, or an object with `pattern` (regex string, required), `flags` (regex flags), and `reason` (message shown when blocked).",
               "type": "array",
               "items": {
-                "type": "string"
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["pattern"],
+                    "properties": {
+                      "pattern": {
+                        "description": "Regex matched against the full shell command.",
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "flags": {
+                        "description": "Regex flags, e.g. \"i\" for case-insensitive.",
+                        "type": "string"
+                      },
+                      "reason": {
+                        "description": "Message shown when the command is blocked.",
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
               },
               "default": []
             }
@@ -159,10 +188,10 @@
           ]
         },
         "permissionMode": {
-          "description": "Claude Code permission mode written to .claude/settings.json.",
+          "description": "Claude Code permission mode written to .claude/settings.json as permissions.defaultMode.",
           "type": "string",
-          "enum": ["default", "auto", "bypassPermissions", "plan"],
-          "default": "auto"
+          "enum": ["default", "acceptEdits", "plan", "bypassPermissions"],
+          "default": "acceptEdits"
         }
       }
     },
@@ -186,11 +215,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "emitChatModes": {
-          "description": "Kept for backwards compatibility. Has no effect since .github/chatmodes/ was deprecated in VS Code 1.106.",
-          "type": "boolean",
-          "default": true
-        },
         "emitPrompts": {
           "description": "Whether to write .github/prompts/*.prompt.md files (slash commands as Copilot prompts).",
           "type": "boolean",

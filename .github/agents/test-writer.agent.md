@@ -80,7 +80,7 @@ These targets are defaults; if the project's `AGENTS.md` defines stricter target
 
 Run the project's test suite. If tests reveal real bugs (as opposed to fixture issues), do not patch the implementation yourself. Document the bugs in the queue's `testFindings` field for the code-reviewer to hand back.
 
-Update the queue:
+Update the queue by setting the fields below, preserving every other existing field (`currentSpec`, `planFile`, `implementedFiles`, etc.) — never replace the whole object:
 
 ```json
 {

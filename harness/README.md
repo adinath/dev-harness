@@ -24,6 +24,13 @@ node harness/bin/harness.mjs sync     # generates .claude/, .cursor/, .github/, 
 node harness/bin/harness.mjs status   # prints current pipeline queue
 ```
 
+To run the harness's own test suite (state machine, frontmatter parser,
+hook scripts):
+
+```bash
+cd harness && npm test    # runs `node --test "tests/*.test.mjs"`
+```
+
 To install the CLI globally so you can run `harness` from anywhere:
 
 ```bash
@@ -71,13 +78,13 @@ State transitions are encoded once in [`src/queue/state-machine.mjs`](src/queue/
 
 - `targets` — any combination of `claude`, `cursor`, `copilot`, `agents-md`.
 - `paths.*` — relative paths (from repo root) to the canonical content directories.
-- `pipeline.stages` — ordered list of pipeline stages; the default is the five-stage flow.
+- `pipeline.stages` — ordered list of pipeline stages. Each stage's `readyStatus`/`activeStatus`/`completedStatus` drives the queue state machine used by the hooks and CLI, and the stage order drives agent colors and Copilot handoffs. If you customize stages, also update the agent prompt files — they write status strings literally.
 - `hooks.guard.extraPatterns` — project-specific regex patterns to block in shell commands. Each entry is `{ pattern, flags, reason }`.
 - `hooks.lint.commands` — map of glob → shell command, run by the lint-and-format hook after a file write.
 - `claude.model` — optional. When set (e.g. `"claude-sonnet-4-5"`) it is written into `.claude/settings.json` and every agent's frontmatter. Leave `null` to let Claude Code use the session default (`inherit`), which is more future-proof.
-- `claude.permissionMode` — default permission mode for `.claude/settings.json` (e.g. `auto`, `acceptEdits`).
-- `cursor.protectedBranches` — branches whose force-push is blocked by the destructive-command guard.
-- `copilot.emitChatModes`, `copilot.emitPrompts` — toggle Copilot output kinds.
+- `claude.permissionMode` — permission mode written to `.claude/settings.json` as `permissions.defaultMode`. One of `default`, `acceptEdits`, `plan`, `bypassPermissions`.
+- `cursor.protectedBranches` — branch names (globs allowed) that the destructive-command guard refuses to `git push` to (including `--delete` and `:branch` refspecs) or force-reset with `git branch -f`.
+- `copilot.emitPrompts` — whether to write `.github/prompts/*.prompt.md` files.
 
 ## Adding content
 

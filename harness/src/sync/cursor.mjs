@@ -9,7 +9,7 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-import { bannerFor, parseFrontmatter, readMarkdownDir, renderMarkdownWithBanner, listDirectories, pruneGeneratedFiles } from './frontmatter.mjs';
+import { bannerFor, parseFrontmatter, readMarkdownDir, renderMarkdownWithBanner, listDirectories, pruneGeneratedFiles, resolveSourceDir } from './frontmatter.mjs';
 
 // Harness tools that imply the agent writes to the filesystem or runs shells.
 // If none of these are present in the agent's tools list, the subagent is
@@ -32,16 +32,16 @@ export function syncCursor(context) {
     messages.push(`pruned legacy .cursor/rules/${name}`);
   }
 
-  writeAgents({ harnessRoot, targetRoot, messages });
-  writeCommands({ harnessRoot, targetRoot, messages });
-  writeSkills({ harnessRoot, targetRoot, messages });
+  writeAgents({ harnessRoot, targetRoot, config, messages });
+  writeCommands({ harnessRoot, targetRoot, config, messages });
+  writeSkills({ harnessRoot, targetRoot, config, messages });
   writeHooks({ harnessRoot, repoRoot, targetRoot, config, messages });
 
   return { messages };
 }
 
-function writeAgents({ harnessRoot, targetRoot, messages }) {
-  const sourceDir = join(harnessRoot, 'agents');
+function writeAgents({ harnessRoot, targetRoot, config, messages }) {
+  const sourceDir = resolveSourceDir(harnessRoot, config?.paths?.agents, 'agents');
   for (const file of readMarkdownDir(sourceDir)) {
     const data = buildCursorAgentFrontmatter(file.data);
     const out = join(targetRoot, 'agents', file.name);
@@ -67,8 +67,8 @@ function buildCursorAgentFrontmatter(source) {
   return data;
 }
 
-function writeCommands({ harnessRoot, targetRoot, messages }) {
-  const sourceDir = join(harnessRoot, 'commands');
+function writeCommands({ harnessRoot, targetRoot, config, messages }) {
+  const sourceDir = resolveSourceDir(harnessRoot, config?.paths?.commands, 'commands');
   for (const file of readMarkdownDir(sourceDir)) {
     const out = join(targetRoot, 'commands', file.name);
     writeFileSync(
@@ -79,8 +79,8 @@ function writeCommands({ harnessRoot, targetRoot, messages }) {
   }
 }
 
-function writeSkills({ harnessRoot, targetRoot, messages }) {
-  const sourceRoot = join(harnessRoot, 'skills');
+function writeSkills({ harnessRoot, targetRoot, config, messages }) {
+  const sourceRoot = resolveSourceDir(harnessRoot, config?.paths?.skills, 'skills');
   if (!existsSync(sourceRoot)) return;
 
   for (const dir of listDirectories(sourceRoot)) {
@@ -99,25 +99,23 @@ function writeSkills({ harnessRoot, targetRoot, messages }) {
 }
 
 function writeHooks({ harnessRoot, repoRoot, targetRoot, config, messages }) {
-  const hookPath = (script) => {
-    const abs = join(harnessRoot, 'hooks', script);
-    return relative(repoRoot, abs).split('\\').join('/');
-  };
+  const hooksDir = resolveSourceDir(harnessRoot, config?.paths?.hooks, 'hooks');
+  const hookPath = (script) => relative(repoRoot, join(hooksDir, script)).split('\\').join('/');
 
   const hooks = {
     version: 1,
     hooks: {
       beforeShellExecution: [
-        { command: `bun ${hookPath('guard-destructive.mjs')}`, timeout: 10 },
+        { command: `node ${hookPath('guard-destructive.mjs')}`, timeout: 10 },
       ],
       afterFileEdit: [
-        { command: `bun ${hookPath('lint-and-format.mjs')}`, timeout: 30 },
+        { command: `node ${hookPath('lint-and-format.mjs')}`, timeout: 30 },
       ],
       subagentStop: [
-        { command: `bun ${hookPath('advance-queue.mjs')}`, timeout: 15 },
+        { command: `node ${hookPath('advance-queue.mjs')}`, timeout: 15 },
       ],
       stop: [
-        { command: `bun ${hookPath('check-queue.mjs')}`, timeout: 15 },
+        { command: `node ${hookPath('check-queue.mjs')}`, timeout: 15 },
       ],
     },
   };

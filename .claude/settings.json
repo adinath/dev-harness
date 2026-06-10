@@ -1,5 +1,7 @@
 {
-  "permissionMode": "auto",
+  "permissions": {
+    "defaultMode": "acceptEdits"
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -7,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/harness/hooks/guard-destructive.mjs\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/harness/hooks/guard-destructive.mjs\"",
             "timeout": 10
           }
         ]
@@ -19,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/harness/hooks/lint-and-format.mjs\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/harness/hooks/lint-and-format.mjs\"",
             "timeout": 30
           }
         ]
@@ -30,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/harness/hooks/check-queue.mjs\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/harness/hooks/check-queue.mjs\"",
             "timeout": 15
           }
         ]
@@ -38,10 +40,11 @@
     ],
     "SubagentStop": [
       {
+        "matcher": "spec-reader|architect-review|implementer|test-writer|code-reviewer",
         "hooks": [
           {
             "type": "command",
-            "command": "bun \"$CLAUDE_PROJECT_DIR/harness/hooks/advance-queue.mjs\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/harness/hooks/advance-queue.mjs\"",
             "timeout": 15
           }
         ]

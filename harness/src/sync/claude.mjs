@@ -13,9 +13,9 @@
 //   same guidance is shared with other tools.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { dirname, join, resolve, relative } from 'node:path';
+import { join, relative } from 'node:path';
 
-import { bannerFor, parseFrontmatter, readMarkdownDir, renderMarkdownWithBanner, listDirectories } from './frontmatter.mjs';
+import { bannerFor, parseFrontmatter, readMarkdownDir, renderMarkdownWithBanner, listDirectories, resolveSourceDir } from './frontmatter.mjs';
 
 // Cycles through the colors Claude Code recognises for agent display.
 // Helps users visually track which pipeline stage is running.
@@ -34,8 +34,8 @@ export function syncClaude(context) {
   writeClaudeMemory({ targetRoot, messages });
   writeSettings({ harnessRoot, repoRoot, targetRoot, config, messages });
   copyAgents({ harnessRoot, targetRoot, config, messages });
-  copyCommands({ harnessRoot, targetRoot, messages });
-  copySkills({ harnessRoot, targetRoot, messages });
+  copyCommands({ harnessRoot, targetRoot, config, messages });
+  copySkills({ harnessRoot, targetRoot, config, messages });
 
   return { messages };
 }
@@ -71,12 +71,43 @@ function writeClaudeMemory({ targetRoot, messages }) {
   messages.push('wrote .claude/CLAUDE.md');
 }
 
+const DEFAULT_PERMISSION_MODE = 'acceptEdits';
+const VALID_PERMISSION_MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'];
+
+function resolvePermissionMode(config) {
+  const configured = config?.claude?.permissionMode;
+  if (configured == null || configured === 'auto') return DEFAULT_PERMISSION_MODE;
+  if (!VALID_PERMISSION_MODES.includes(configured)) {
+    throw new Error(
+      `claude.permissionMode "${configured}" is not a valid Claude Code permission mode; ` +
+        `expected one of: ${VALID_PERMISSION_MODES.join(', ')}`,
+    );
+  }
+  return configured;
+}
+
 function writeSettings({ harnessRoot, repoRoot, targetRoot, config, messages }) {
-  const hooksDir = relative(repoRoot, join(harnessRoot, 'hooks')).split('\\').join('/');
-  const cmd = (script) => `bun "$CLAUDE_PROJECT_DIR/${hooksDir}/${script}"`;
+  const hooksDir = relative(repoRoot, resolveSourceDir(harnessRoot, config?.paths?.hooks, 'hooks'))
+    .split('\\')
+    .join('/');
+  const cmd = (script) => `node "$CLAUDE_PROJECT_DIR/${hooksDir}/${script}"`;
+
+  // Scope SubagentStop to the pipeline agents so unrelated subagents
+  // (Explore, ad-hoc Tasks) never trigger the queue-advance hook. The
+  // hook itself re-checks the agent against the queue state.
+  const stageIds = (config?.pipeline?.stages ?? [])
+    .map((stage) => stage?.id)
+    .filter((id) => typeof id === 'string' && id !== '');
+  const advanceQueueHooks = [{ type: 'command', command: cmd('advance-queue.mjs'), timeout: 15 }];
+  const subagentStopEntry =
+    stageIds.length > 0
+      ? { matcher: stageIds.join('|'), hooks: advanceQueueHooks }
+      : { hooks: advanceQueueHooks };
 
   const settings = {
-    permissionMode: config?.claude?.permissionMode ?? 'auto',
+    permissions: {
+      defaultMode: resolvePermissionMode(config),
+    },
     hooks: {
       PreToolUse: [
         {
@@ -95,11 +126,7 @@ function writeSettings({ harnessRoot, repoRoot, targetRoot, config, messages }) 
           hooks: [{ type: 'command', command: cmd('check-queue.mjs'), timeout: 15 }],
         },
       ],
-      SubagentStop: [
-        {
-          hooks: [{ type: 'command', command: cmd('advance-queue.mjs'), timeout: 15 }],
-        },
-      ],
+      SubagentStop: [subagentStopEntry],
     },
   };
   // Only pin a model when the user has explicitly configured one. Omitting
@@ -108,10 +135,11 @@ function writeSettings({ harnessRoot, repoRoot, targetRoot, config, messages }) 
     settings.model = config.claude.model;
   }
 
+  // No generated-file banner here: Claude Code parses settings.json as strict
+  // JSON, and a leading // comment makes the entire file unreadable.
   const settingsPath = join(targetRoot, 'settings.json');
-  const banner = bannerFor('json', 'harness.config.json');
   const body = JSON.stringify(settings, null, 2);
-  writeFileSync(settingsPath, `${banner}\n${body}\n`);
+  writeFileSync(settingsPath, `${body}\n`);
   messages.push(`wrote ${relative(repoRoot, settingsPath)}`);
 }
 
@@ -139,8 +167,8 @@ function copyAgents({ harnessRoot, targetRoot, config, messages }) {
   }
 }
 
-function copyCommands({ harnessRoot, targetRoot, messages }) {
-  const sourceDir = join(harnessRoot, 'commands');
+function copyCommands({ harnessRoot, targetRoot, config, messages }) {
+  const sourceDir = resolveSourceDir(harnessRoot, config?.paths?.commands, 'commands');
   for (const file of readMarkdownDir(sourceDir)) {
     const data = { ...file.data };
     // Auto-derive `argument-hint` when the command body references $ARGUMENTS
@@ -155,8 +183,8 @@ function copyCommands({ harnessRoot, targetRoot, messages }) {
   }
 }
 
-function copySkills({ harnessRoot, targetRoot, messages }) {
-  const sourceRoot = join(harnessRoot, 'skills');
+function copySkills({ harnessRoot, targetRoot, config, messages }) {
+  const sourceRoot = resolveSourceDir(harnessRoot, config?.paths?.skills, 'skills');
   if (!existsSync(sourceRoot)) return;
 
   for (const dir of listDirectories(sourceRoot)) {
@@ -172,12 +200,4 @@ function copySkills({ harnessRoot, targetRoot, messages }) {
     );
     messages.push(`wrote .claude/skills/${dir}/SKILL.md`);
   }
-}
-
-function resolveSourceDir(harnessRoot, configured, fallback) {
-  if (!configured) return join(harnessRoot, fallback);
-  if (configured.startsWith('harness/')) {
-    return resolve(harnessRoot, '..', configured);
-  }
-  return resolve(harnessRoot, configured);
 }

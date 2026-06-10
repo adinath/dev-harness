@@ -94,8 +94,10 @@ Specific guidance the implementer should follow even on approved plans.
 
 ## Queue update
 
-- If APPROVED: `{ currentStage: "implementer", status: "READY_FOR_IMPL" }`.
-- If REVISION_NEEDED: `{ currentStage: "spec-reader", status: "NEEDS_REVISION" }`.
+Set only the fields listed below in `harness/queue/agent-queue.json`, preserving every other existing field — never replace the whole object.
+
+- If APPROVED: set `currentStage: "implementer"` and `status: "READY_FOR_IMPL"`.
+- If REVISION_NEEDED: set `currentStage: "spec-reader"` and `status: "NEEDS_REVISION"`.
 
 ## Rules
 

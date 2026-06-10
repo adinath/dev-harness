@@ -71,7 +71,7 @@ Follow the language's idiomatic style and the project's `AGENTS.md`. No magic nu
 
 ## After implementation
 
-Update the queue:
+Update the queue by setting the fields below, preserving every other existing field (`currentSpec`, `planFile`, `startedAt`, etc.) — never replace the whole object:
 
 ```json
 {

@@ -17,7 +17,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-import { bannerFor, parseFrontmatter, readMarkdownDir, renderMarkdownWithBanner, listDirectories, pruneGeneratedFiles } from './frontmatter.mjs';
+import { bannerFor, parseFrontmatter, readMarkdownDir, renderMarkdownWithBanner, listDirectories, pruneGeneratedFiles, resolveSourceDir } from './frontmatter.mjs';
 
 export function syncCopilot(context) {
   const { harnessRoot, repoRoot, config } = context;
@@ -41,11 +41,11 @@ export function syncCopilot(context) {
 
   writeInstructions({ harnessRoot, targetRoot, messages });
   writeAgents({ harnessRoot, targetRoot, config, messages });
-  writeSkills({ harnessRoot, targetRoot, messages });
+  writeSkills({ harnessRoot, targetRoot, config, messages });
   if (config?.copilot?.emitPrompts !== false) {
-    writePrompts({ harnessRoot, targetRoot, messages });
+    writePrompts({ harnessRoot, targetRoot, config, messages });
   }
-  writeHooks({ harnessRoot, repoRoot, targetRoot, messages });
+  writeHooks({ harnessRoot, repoRoot, targetRoot, config, messages });
 
   return { messages };
 }
@@ -64,7 +64,7 @@ function writeInstructions({ harnessRoot, targetRoot, messages }) {
 }
 
 function writeAgents({ harnessRoot, targetRoot, config, messages }) {
-  const sourceDir = join(harnessRoot, 'agents');
+  const sourceDir = resolveSourceDir(harnessRoot, config?.paths?.agents, 'agents');
   const stages = Array.isArray(config?.pipeline?.stages) ? config.pipeline.stages : [];
   const stageOrder = stages.map((stage) => stage?.id).filter(Boolean);
 
@@ -115,8 +115,8 @@ function buildHandoffs(currentName, stageOrder) {
   ];
 }
 
-function writeSkills({ harnessRoot, targetRoot, messages }) {
-  const sourceRoot = join(harnessRoot, 'skills');
+function writeSkills({ harnessRoot, targetRoot, config, messages }) {
+  const sourceRoot = resolveSourceDir(harnessRoot, config?.paths?.skills, 'skills');
   if (!existsSync(sourceRoot)) return;
 
   for (const dir of listDirectories(sourceRoot)) {
@@ -134,8 +134,8 @@ function writeSkills({ harnessRoot, targetRoot, messages }) {
   }
 }
 
-function writePrompts({ harnessRoot, targetRoot, messages }) {
-  const sourceDir = join(harnessRoot, 'commands');
+function writePrompts({ harnessRoot, targetRoot, config, messages }) {
+  const sourceDir = resolveSourceDir(harnessRoot, config?.paths?.commands, 'commands');
   for (const file of readMarkdownDir(sourceDir)) {
     const baseName = file.name.replace(/\.md$/, '');
     const data = {
@@ -151,11 +151,9 @@ function writePrompts({ harnessRoot, targetRoot, messages }) {
   }
 }
 
-function writeHooks({ harnessRoot, repoRoot, targetRoot, messages }) {
-  const hookPath = (script) => {
-    const abs = join(harnessRoot, 'hooks', script);
-    return relative(repoRoot, abs).split('\\').join('/');
-  };
+function writeHooks({ harnessRoot, repoRoot, targetRoot, config, messages }) {
+  const hooksDir = resolveSourceDir(harnessRoot, config?.paths?.hooks, 'hooks');
+  const hookPath = (script) => relative(repoRoot, join(hooksDir, script)).split('\\').join('/');
 
   // VS Code Copilot uses PascalCase event names that mirror Claude Code's,
   // but `.github/hooks.json` expects a flat array per event (no matcher
@@ -164,16 +162,16 @@ function writeHooks({ harnessRoot, repoRoot, targetRoot, messages }) {
   const hooks = {
     hooks: {
       PreToolUse: [
-        { type: 'command', command: `bun ${hookPath('guard-destructive.mjs')}` },
+        { type: 'command', command: `node ${hookPath('guard-destructive.mjs')}` },
       ],
       PostToolUse: [
-        { type: 'command', command: `bun ${hookPath('lint-and-format.mjs')}` },
+        { type: 'command', command: `node ${hookPath('lint-and-format.mjs')}` },
       ],
       SubagentStop: [
-        { type: 'command', command: `bun ${hookPath('advance-queue.mjs')}` },
+        { type: 'command', command: `node ${hookPath('advance-queue.mjs')}` },
       ],
       Stop: [
-        { type: 'command', command: `bun ${hookPath('check-queue.mjs')}` },
+        { type: 'command', command: `node ${hookPath('check-queue.mjs')}` },
       ],
     },
   };

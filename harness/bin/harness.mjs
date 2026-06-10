@@ -1,13 +1,13 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // harness — tool-agnostic developer harness CLI.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 
-import { describe, readQueue, writeQueue } from '../src/queue/state-machine.mjs';
+import { buildPipeline, describe, readQueueState, writeQueue } from '../src/queue/state-machine.mjs';
 import { syncClaude } from '../src/sync/claude.mjs';
 import { syncCursor } from '../src/sync/cursor.mjs';
 import { syncCopilot } from '../src/sync/copilot.mjs';
@@ -88,14 +88,21 @@ function parseSyncArgs(args) {
   return { targets };
 }
 
+const CONFIG_TEMPLATE_PATH = join(HARNESS_ROOT, 'templates', 'harness.config.template.json');
+
 async function cmdInit() {
   if (existsSync(CONFIG_PATH)) {
     stdout.write(`harness.config.json already exists at ${CONFIG_PATH}\n`);
     return 0;
   }
-  stdout.write('Cannot auto-create harness.config.json: the template is shipped with the harness itself.\n');
-  stdout.write(`Expected file: ${CONFIG_PATH}\n`);
-  return 1;
+  if (!existsSync(CONFIG_TEMPLATE_PATH)) {
+    stdout.write(`Config template missing at ${CONFIG_TEMPLATE_PATH}; cannot create harness.config.json.\n`);
+    return 1;
+  }
+  writeFileSync(CONFIG_PATH, readFileSync(CONFIG_TEMPLATE_PATH, 'utf8'));
+  stdout.write(`Created ${CONFIG_PATH} from defaults.\n`);
+  stdout.write('Edit project.name and project.description, then run `harness sync`.\n');
+  return 0;
 }
 
 function cmdSync(args) {
@@ -146,8 +153,14 @@ function cmdSync(args) {
 function cmdStatus() {
   const config = loadConfig();
   const queuePath = resolveFromRepo(config?.paths?.queue ?? 'harness/queue/agent-queue.json');
-  const queue = readQueue(queuePath);
-  const view = describe(queue);
+  const state = readQueueState(queuePath);
+  if (state.kind === 'malformed') {
+    stdout.write(`Queue file is corrupted: ${state.error}\n`);
+    stdout.write(`File: ${state.path}\n`);
+    stdout.write('Run `harness queue reset` to clear it.\n');
+    return 1;
+  }
+  const view = describe(state.kind === 'ok' ? state.queue : null, buildPipeline(config?.pipeline?.stages));
   if (!view) {
     stdout.write('No active implementation in progress. Use `/implement <spec-name>` to start.\n');
     return 0;
@@ -168,15 +181,20 @@ async function cmdQueue(args) {
   }
   const config = loadConfig();
   const queuePath = resolveFromRepo(config?.paths?.queue ?? 'harness/queue/agent-queue.json');
-  const queue = readQueue(queuePath);
+  const state = readQueueState(queuePath);
 
-  if (!queue || Object.keys(queue).length === 0) {
+  if (state.kind === 'missing' || state.kind === 'empty' || (state.kind === 'ok' && Object.keys(state.queue).length === 0)) {
     stdout.write('Queue is already empty.\n');
     return 0;
   }
 
-  stdout.write('Current queue contents:\n');
-  stdout.write(`${JSON.stringify(queue, null, 2)}\n`);
+  if (state.kind === 'malformed') {
+    stdout.write(`Queue file is corrupted: ${state.error}\n`);
+    stdout.write(`File: ${state.path}\n`);
+  } else {
+    stdout.write('Current queue contents:\n');
+    stdout.write(`${JSON.stringify(state.queue, null, 2)}\n`);
+  }
   const rl = createInterface({ input: stdin, output: stdout });
   const answer = await rl.question('Clear this queue? Type "yes" to confirm: ');
   await rl.close();
@@ -196,11 +214,24 @@ function resolveFromRepo(relativePath) {
   return resolve(REPO_ROOT, relativePath);
 }
 
-export { resolveFromRepo };
+// Only run the CLI when executed directly, so importing this module
+// (e.g. from tests) doesn't trigger a command. realpathSync resolves the
+// symlink npm creates for globally installed bins; import.meta.main would
+// be simpler but needs Node 24+.
+function isExecutedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+}
 
-main()
-  .then((code) => process.exit(code ?? 0))
-  .catch((error) => {
-    stdout.write(`harness: ${error.message}\n`);
-    process.exit(1);
-  });
+if (isExecutedDirectly()) {
+  main()
+    .then((code) => process.exit(code ?? 0))
+    .catch((error) => {
+      stdout.write(`harness: ${error.message}\n`);
+      process.exit(1);
+    });
+}

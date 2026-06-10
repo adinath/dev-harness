@@ -23,4 +23,4 @@ Start implementing the feature defined in `harness/specs/$ARGUMENTS.md`.
 
 3. Invoke the `spec-reader` subagent with the spec name `$ARGUMENTS`.
 
-After `spec-reader` completes, the queue-advance hook will tell you the next stage and the next subagent to invoke. Follow that prompt until the queue reaches `COMPLETE`, `BLOCKED`, or a `NEEDS_*` status that requires user input.
+After each stage completes, read `harness/queue/agent-queue.json` and invoke the subagent for the current status (the Stop hook will also prompt you with the next action if you stop early). Continue until the queue reaches `COMPLETE`, `BLOCKED`, or a `NEEDS_*` status that requires user input.
